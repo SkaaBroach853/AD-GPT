@@ -39,10 +39,15 @@ fun ChatRoute(
             state = state,
             readyForEntrance = readyForEntrance,
             onInputChange = viewModel::updateInput,
+            onApiKeyChange = viewModel::updateApiKey,
+            onActivateApi = viewModel::activateDetectedProvider,
+            onClearApi = viewModel::clearApiKey,
             onSend = viewModel::send,
             onNewChat = viewModel::startNewChat,
             onHistoryClick = viewModel::selectHistory,
             onQuickPrompt = viewModel::useQuickPrompt,
+            onToggleSidebar = viewModel::toggleSidebar,
+            onToggleChatMinimized = viewModel::toggleChatMinimized,
             onSettingsClick = onSettingsClick
         )
     }

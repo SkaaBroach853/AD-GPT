@@ -21,8 +21,15 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val history: List<ChatHistoryItem> = emptyList(),
     val input: String = "",
+    val apiKeyInput: String = "",
+    val detectedProvider: ProviderUi? = null,
+    val activeProvider: ProviderUi? = null,
+    val activeModel: String = "Local demo",
+    val apiStatus: ApiStatus = ApiStatus.Idle,
     val sending: Boolean = false,
-    val selectedHistoryId: String? = null
+    val selectedHistoryId: String? = null,
+    val sidebarCollapsed: Boolean = false,
+    val chatMinimized: Boolean = false
 )
 
 data class ChatHistoryItem(
@@ -30,6 +37,20 @@ data class ChatHistoryItem(
     val title: String,
     val subtitle: String
 )
+
+data class ProviderUi(
+    val id: String,
+    val name: String,
+    val model: String,
+    val badge: String
+)
+
+enum class ApiStatus {
+    Idle,
+    Detected,
+    Active,
+    Invalid
+}
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -64,6 +85,46 @@ class ChatViewModel @Inject constructor(
         localState.update { it.copy(input = value) }
     }
 
+    fun updateApiKey(value: String) {
+        val normalized = value.trim()
+        val provider = detectProvider(normalized)
+        localState.update {
+            it.copy(
+                apiKeyInput = value,
+                detectedProvider = provider,
+                apiStatus = when {
+                    normalized.isBlank() -> ApiStatus.Idle
+                    provider == null -> ApiStatus.Invalid
+                    else -> ApiStatus.Detected
+                }
+            )
+        }
+    }
+
+    fun activateDetectedProvider() {
+        val provider = localState.value.detectedProvider ?: return
+        localState.update {
+            it.copy(
+                activeProvider = provider,
+                activeModel = provider.model,
+                apiStatus = ApiStatus.Active,
+                apiKeyInput = maskKey(it.apiKeyInput)
+            )
+        }
+    }
+
+    fun clearApiKey() {
+        localState.update {
+            it.copy(
+                apiKeyInput = "",
+                detectedProvider = null,
+                activeProvider = null,
+                activeModel = "Local demo",
+                apiStatus = ApiStatus.Idle
+            )
+        }
+    }
+
     fun send() {
         val prompt = localState.value.input.trim()
         if (prompt.isBlank() || localState.value.sending) return
@@ -87,5 +148,38 @@ class ChatViewModel @Inject constructor(
 
     fun useQuickPrompt(prompt: String) {
         localState.update { it.copy(input = prompt) }
+    }
+
+    fun toggleSidebar() {
+        localState.update { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
+    }
+
+    fun toggleChatMinimized() {
+        localState.update { it.copy(chatMinimized = !it.chatMinimized) }
+    }
+
+    private fun detectProvider(key: String): ProviderUi? {
+        if (key.length < 12 || key.contains(" ")) return null
+        return when {
+            key.startsWith("sk-ant-", ignoreCase = true) ->
+                ProviderUi("anthropic", "Anthropic", "Claude", "CLAUDE")
+            key.startsWith("AIza", ignoreCase = false) ->
+                ProviderUi("google", "Google Gemini", "Gemini Pro", "GEMINI")
+            key.startsWith("gsk_", ignoreCase = true) ->
+                ProviderUi("groq", "Groq", "Llama / Mixtral", "GROQ")
+            key.startsWith("sk-or-", ignoreCase = true) ->
+                ProviderUi("openrouter", "OpenRouter", "OpenRouter Auto", "ROUTER")
+            key.startsWith("sk-", ignoreCase = true) ->
+                ProviderUi("openai", "OpenAI", "GPT", "OPENAI")
+            key.startsWith("mistral_", ignoreCase = true) ->
+                ProviderUi("mistral", "Mistral", "Mistral", "MISTRAL")
+            else -> null
+        }
+    }
+
+    private fun maskKey(key: String): String {
+        val normalized = key.trim()
+        if (normalized.length <= 10) return "••••"
+        return normalized.take(6) + "••••••" + normalized.takeLast(4)
     }
 }
