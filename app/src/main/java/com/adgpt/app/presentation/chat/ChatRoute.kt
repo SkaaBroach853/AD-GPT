@@ -46,6 +46,8 @@ fun ChatRoute(
             onNewChat = viewModel::startNewChat,
             onHistoryClick = viewModel::selectHistory,
             onQuickPrompt = viewModel::useQuickPrompt,
+            onAddAttachment = viewModel::addAttachment,
+            onRemoveAttachment = viewModel::removeAttachment,
             onToggleSidebar = viewModel::toggleSidebar,
             onToggleChatMinimized = viewModel::toggleChatMinimized,
             onToggleTheme = viewModel::toggleTheme,

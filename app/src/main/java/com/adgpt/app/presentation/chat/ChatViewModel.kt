@@ -25,6 +25,7 @@ data class ChatUiState(
     val detectedProvider: ProviderUi? = null,
     val activeProvider: ProviderUi? = null,
     val activeModel: String = "AD-GPT",
+    val attachments: List<AttachmentUi> = emptyList(),
     val apiStatus: ApiStatus = ApiStatus.Idle,
     val sending: Boolean = false,
     val selectedHistoryId: String? = null,
@@ -44,6 +45,12 @@ data class ProviderUi(
     val name: String,
     val model: String,
     val badge: String
+)
+
+data class AttachmentUi(
+    val id: String,
+    val name: String,
+    val type: String
 )
 
 enum class ApiStatus {
@@ -95,7 +102,6 @@ class ChatViewModel @Inject constructor(
                 detectedProvider = provider,
                 apiStatus = when {
                     normalized.isBlank() -> ApiStatus.Idle
-                    provider == null -> ApiStatus.Invalid
                     else -> ApiStatus.Detected
                 }
             )
@@ -128,10 +134,12 @@ class ChatViewModel @Inject constructor(
 
     fun send() {
         val prompt = localState.value.input.trim()
-        if (prompt.isBlank() || localState.value.sending) return
+        val attachments = localState.value.attachments
+        if ((prompt.isBlank() && attachments.isEmpty()) || localState.value.sending) return
         viewModelScope.launch {
-            localState.update { it.copy(input = "", sending = true) }
-            runCatching { sendMessage(prompt) }
+            val attachmentSummary = attachments.joinToString(prefix = "\n\nAttachments: ") { "${it.name} (${it.type})" }
+            localState.update { it.copy(input = "", attachments = emptyList(), sending = true) }
+            runCatching { sendMessage(prompt + attachmentSummary) }
             localState.update { it.copy(sending = false) }
         }
     }
@@ -151,6 +159,22 @@ class ChatViewModel @Inject constructor(
         localState.update { it.copy(input = prompt) }
     }
 
+    fun addAttachment(name: String, type: String) {
+        localState.update {
+            it.copy(
+                attachments = it.attachments + AttachmentUi(
+                    id = System.currentTimeMillis().toString(),
+                    name = name,
+                    type = type
+                )
+            )
+        }
+    }
+
+    fun removeAttachment(id: String) {
+        localState.update { state -> state.copy(attachments = state.attachments.filterNot { it.id == id }) }
+    }
+
     fun toggleSidebar() {
         localState.update { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
     }
@@ -164,21 +188,33 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun detectProvider(key: String): ProviderUi? {
-        if (key.length < 12 || key.contains(" ")) return null
+        if (key.length < 8 || key.contains(" ")) return null
         return when {
+            key.startsWith("nvapi-", ignoreCase = true) ->
+                ProviderUi("nvidia", "NVIDIA", "NVIDIA NIM", "NVIDIA")
             key.startsWith("sk-ant-", ignoreCase = true) ->
                 ProviderUi("anthropic", "Anthropic", "Claude", "CLAUDE")
             key.startsWith("AIza", ignoreCase = false) ->
                 ProviderUi("google", "Google Gemini", "Gemini Pro", "GEMINI")
             key.startsWith("gsk_", ignoreCase = true) ->
                 ProviderUi("groq", "Groq", "Llama / Mixtral", "GROQ")
+            key.startsWith("xai-", ignoreCase = true) ->
+                ProviderUi("xai", "xAI", "Grok", "XAI")
+            key.startsWith("hf_", ignoreCase = true) ->
+                ProviderUi("huggingface", "Hugging Face", "HF Inference", "HF")
+            key.startsWith("co-", ignoreCase = true) ->
+                ProviderUi("cohere", "Cohere", "Command", "COHERE")
+            key.startsWith("pplx-", ignoreCase = true) ->
+                ProviderUi("perplexity", "Perplexity", "Sonar", "PPLX")
+            key.startsWith("replicate_", ignoreCase = true) || key.startsWith("r8_", ignoreCase = true) ->
+                ProviderUi("replicate", "Replicate", "Replicate", "REPL")
             key.startsWith("sk-or-", ignoreCase = true) ->
                 ProviderUi("openrouter", "OpenRouter", "OpenRouter Auto", "ROUTER")
             key.startsWith("sk-", ignoreCase = true) ->
                 ProviderUi("openai", "OpenAI", "GPT", "OPENAI")
             key.startsWith("mistral_", ignoreCase = true) ->
                 ProviderUi("mistral", "Mistral", "Mistral", "MISTRAL")
-            else -> null
+            else -> ProviderUi("custom", "Custom Provider", "OpenAI-compatible", "API")
         }
     }
 

@@ -1,5 +1,7 @@
 package com.adgpt.app.presentation.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -82,6 +84,8 @@ fun ChatScreen(
     onNewChat: () -> Unit,
     onHistoryClick: (String) -> Unit,
     onQuickPrompt: (String) -> Unit,
+    onAddAttachment: (String, String) -> Unit,
+    onRemoveAttachment: (String) -> Unit,
     onToggleSidebar: () -> Unit,
     onToggleChatMinimized: () -> Unit,
     onToggleTheme: () -> Unit,
@@ -89,6 +93,14 @@ fun ChatScreen(
 ) {
     val colors = appColors(state.darkTheme)
     var dragAmount by remember { mutableFloatStateOf(0f) }
+    val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            onAddAttachment(it.lastPathSegment?.substringAfterLast('/') ?: "Selected file", "file")
+        }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) onAddAttachment("Camera image", "image")
+    }
 
     Box(
         modifier = Modifier
@@ -144,12 +156,14 @@ fun ChatScreen(
 
             ComposerBar(
                 input = state.input,
+                attachments = state.attachments,
                 sending = state.sending,
                 colors = colors,
                 onInputChange = onInputChange,
                 onSend = onSend,
-                onAttachFile = { onQuickPrompt("I want to attach a file.") },
-                onCamera = { onQuickPrompt("I want to use the camera.") }
+                onAttachFile = { fileLauncher.launch(arrayOf("*/*")) },
+                onCamera = { cameraLauncher.launch(null) },
+                onRemoveAttachment = onRemoveAttachment
             )
         }
 
@@ -252,55 +266,99 @@ private fun MessageBubble(message: ChatMessage, colors: ChatColors) {
 @Composable
 private fun ComposerBar(
     input: String,
+    attachments: List<AttachmentUi>,
     sending: Boolean,
     colors: ChatColors,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onAttachFile: () -> Unit,
-    onCamera: () -> Unit
+    onCamera: () -> Unit,
+    onRemoveAttachment: (String) -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        color = colors.composer,
-        border = BorderStroke(1.dp, colors.border)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (attachments.isNotEmpty()) {
+            AttachmentStrip(attachments = attachments, colors = colors, onRemoveAttachment = onRemoveAttachment)
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(30.dp),
+            color = colors.composer,
+            border = BorderStroke(1.dp, colors.border)
         ) {
-            IconButton(onClick = onAttachFile) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add files", tint = colors.text)
-            }
-            IconButton(onClick = onCamera) {
-                Icon(Icons.Rounded.CameraAlt, contentDescription = "Camera", tint = colors.text)
-            }
-            TextField(
-                value = input,
-                onValueChange = onInputChange,
-                placeholder = { Text("Message AD-GPT", color = colors.muted) },
-                modifier = Modifier.weight(1f),
-                textStyle = TextStyle(color = colors.text),
-                minLines = 1,
-                maxLines = 4,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = SoftBlue
-                )
-            )
-            IconButton(
-                onClick = onSend,
-                enabled = input.isNotBlank() && !sending
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Rounded.Send,
-                    contentDescription = "Send",
-                    tint = if (input.isNotBlank()) SoftBlue else colors.muted
+                IconButton(onClick = onAttachFile) {
+                    Icon(Icons.Rounded.Add, contentDescription = "Add files", tint = colors.text)
+                }
+                IconButton(onClick = onCamera) {
+                    Icon(Icons.Rounded.CameraAlt, contentDescription = "Camera", tint = colors.text)
+                }
+                TextField(
+                    value = input,
+                    onValueChange = onInputChange,
+                    placeholder = { Text("Message AD-GPT", color = colors.muted) },
+                    modifier = Modifier.weight(1f),
+                    textStyle = TextStyle(color = colors.text),
+                    minLines = 1,
+                    maxLines = 4,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = SoftBlue
+                    )
                 )
+                IconButton(
+                    onClick = onSend,
+                    enabled = (input.isNotBlank() || attachments.isNotEmpty()) && !sending
+                ) {
+                    Icon(
+                        Icons.Rounded.Send,
+                        contentDescription = "Send",
+                        tint = if (input.isNotBlank() || attachments.isNotEmpty()) SoftBlue else colors.muted
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentStrip(
+    attachments: List<AttachmentUi>,
+    colors: ChatColors,
+    onRemoveAttachment: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        attachments.forEach { attachment ->
+            Surface(
+                color = colors.card,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, colors.border),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.AttachFile, contentDescription = null, tint = colors.text, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        attachment.name,
+                        color = colors.text,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(attachment.type, color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    IconButton(onClick = { onRemoveAttachment(attachment.id) }) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Remove attachment", tint = colors.muted)
+                    }
+                }
             }
         }
     }
