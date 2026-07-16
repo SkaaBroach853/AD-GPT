@@ -12,7 +12,9 @@ data class SavedApiKey(
     val providerName: String,
     val model: String,
     val key: String,
-    val maskedKey: String
+    val maskedKey: String,
+    val label: String = providerName,
+    val enabled: Boolean = true
 )
 
 @Singleton
@@ -30,12 +32,27 @@ class ApiKeyStore @Inject constructor() {
 
     fun remove(id: String) {
         _keys.update { keys -> keys.filterNot { it.id == id } }
-        if (_activeKeyId.value == id) _activeKeyId.value = _keys.value.firstOrNull()?.id
+        if (_activeKeyId.value == id) {
+            _activeKeyId.value = _keys.value.firstOrNull { it.enabled }?.id
+        }
     }
 
     fun select(id: String) {
-        if (_keys.value.any { it.id == id }) _activeKeyId.value = id
+        if (_keys.value.any { it.id == id && it.enabled }) _activeKeyId.value = id
     }
 
-    fun activeKey(): SavedApiKey? = _keys.value.firstOrNull { it.id == _activeKeyId.value }
+    fun rename(id: String, label: String) {
+        _keys.update { keys ->
+            keys.map { if (it.id == id) it.copy(label = label.ifBlank { it.providerName }) else it }
+        }
+    }
+
+    fun setEnabled(id: String, enabled: Boolean) {
+        _keys.update { keys -> keys.map { if (it.id == id) it.copy(enabled = enabled) else it } }
+        if (!enabled && _activeKeyId.value == id) {
+            _activeKeyId.value = _keys.value.firstOrNull { it.enabled }?.id
+        }
+    }
+
+    fun activeKey(): SavedApiKey? = _keys.value.firstOrNull { it.id == _activeKeyId.value && it.enabled }
 }

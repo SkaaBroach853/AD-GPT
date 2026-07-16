@@ -2,13 +2,11 @@ package com.adgpt.app.presentation.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.adgpt.app.domain.model.ChatMessage
-import com.adgpt.app.domain.model.MessageRole
+import com.adgpt.app.data.provider.AiProvider
 import com.adgpt.app.data.provider.ApiKeyStore
 import com.adgpt.app.data.provider.SavedApiKey
-import com.adgpt.app.domain.usecase.ClearChatUseCase
-import com.adgpt.app.domain.usecase.ObserveMessagesUseCase
-import com.adgpt.app.domain.usecase.SendMessageUseCase
+import com.adgpt.app.domain.model.ChatMessage
+import com.adgpt.app.domain.model.MessageRole
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 data class ChatUiState(
@@ -44,6 +43,13 @@ data class ChatHistoryItem(
     val subtitle: String
 )
 
+data class ChatSessionUi(
+    val id: String,
+    val title: String,
+    val createdAt: Long,
+    val messages: List<ChatMessage> = emptyList()
+)
+
 data class ProviderUi(
     val id: String,
     val name: String,
@@ -59,9 +65,11 @@ data class AttachmentUi(
 
 data class SavedApiUi(
     val id: String,
+    val label: String,
     val providerName: String,
     val model: String,
-    val maskedKey: String
+    val maskedKey: String,
+    val enabled: Boolean
 )
 
 enum class ApiStatus {
@@ -73,37 +81,33 @@ enum class ApiStatus {
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    observeMessages: ObserveMessagesUseCase,
-    private val sendMessage: SendMessageUseCase,
-    private val clearChat: ClearChatUseCase,
+    private val aiProvider: AiProvider,
     private val apiKeyStore: ApiKeyStore
 ) : ViewModel() {
-    private val localState = MutableStateFlow(ChatUiState())
+    private val firstChatId = UUID.randomUUID().toString()
+    private val sessions = MutableStateFlow(
+        listOf(ChatSessionUi(firstChatId, "New chat", System.currentTimeMillis()))
+    )
+    private val activeChatId = MutableStateFlow(firstChatId)
+    private val localState = MutableStateFlow(ChatUiState(selectedHistoryId = firstChatId))
 
     val state: StateFlow<ChatUiState> =
-        combine(observeMessages(), localState, apiKeyStore.keys, apiKeyStore.activeKeyId) { messages, state, keys, activeKeyId ->
-            val history = messages
-                .filter { it.role == MessageRole.User }
-                .takeLast(12)
-                .reversed()
-                .mapIndexed { index, message ->
-                    ChatHistoryItem(
-                        id = message.id,
-                        title = message.content.take(38).ifBlank { "New conversation" },
-                        subtitle = if (index == 0) "Latest prompt" else "Earlier prompt"
-                    )
-                }
+        combine(sessions, activeChatId, localState, apiKeyStore.keys, apiKeyStore.activeKeyId) { chats, activeId, state, keys, activeKeyId ->
+            val activeChat = chats.firstOrNull { it.id == activeId } ?: chats.first()
+            val history = chats.sortedByDescending { it.createdAt }.map {
+                ChatHistoryItem(it.id, it.title, "${it.messages.size} messages")
+            }
+            val activeKey = keys.firstOrNull { it.id == activeKeyId }
             state.copy(
-                messages = messages,
+                messages = activeChat.messages,
                 history = history,
-                selectedHistoryId = state.selectedHistoryId ?: history.firstOrNull()?.id,
+                selectedHistoryId = activeId,
                 savedApis = keys.map { it.toUi() },
                 activeApiId = activeKeyId,
-                activeProvider = keys.firstOrNull { it.id == activeKeyId }?.toProviderUi() ?: state.activeProvider,
-                activeModel = keys.firstOrNull { it.id == activeKeyId }?.model ?: state.activeModel
+                activeProvider = activeKey?.toProviderUi() ?: state.activeProvider,
+                activeModel = activeKey?.model ?: "AD-GPT"
             )
-        }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState())
 
     fun updateInput(value: String) {
         localState.update { it.copy(input = value) }
@@ -135,7 +139,8 @@ class ChatViewModel @Inject constructor(
                 providerName = provider.name,
                 model = provider.model,
                 key = rawKey,
-                maskedKey = maskKey(rawKey)
+                maskedKey = maskKey(rawKey),
+                label = provider.name
             )
         )
         localState.update {
@@ -143,7 +148,7 @@ class ChatViewModel @Inject constructor(
                 activeProvider = provider,
                 activeModel = provider.model,
                 apiStatus = ApiStatus.Active,
-                apiKeyInput = maskKey(it.apiKeyInput)
+                apiKeyInput = maskKey(rawKey)
             )
         }
     }
@@ -166,22 +171,40 @@ class ChatViewModel @Inject constructor(
         val attachments = localState.value.attachments
         if ((prompt.isBlank() && attachments.isEmpty()) || localState.value.sending) return
         viewModelScope.launch {
-            val attachmentSummary = attachments.joinToString(prefix = "\n\nAttachments: ") { "${it.name} (${it.type})" }
+            val attachmentSummary = if (attachments.isEmpty()) "" else {
+                attachments.joinToString(prefix = "\n\nAttachments:\n") { "- ${it.name} (${it.type})" }
+            }
+            val userMessage = ChatMessage(
+                id = UUID.randomUUID().toString(),
+                role = MessageRole.User,
+                content = prompt + attachmentSummary,
+                createdAt = System.currentTimeMillis()
+            )
+            appendToActiveChat(userMessage)
             localState.update { it.copy(input = "", attachments = emptyList(), sending = true) }
-            runCatching { sendMessage(prompt + attachmentSummary) }
+            val reply = aiProvider.complete(currentMessages())
+            appendToActiveChat(
+                ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    role = MessageRole.Assistant,
+                    content = reply,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
             localState.update { it.copy(sending = false) }
         }
     }
 
     fun startNewChat() {
-        viewModelScope.launch {
-            clearChat()
-            localState.update { it.copy(selectedHistoryId = null, input = "") }
-        }
+        val id = UUID.randomUUID().toString()
+        sessions.update { listOf(ChatSessionUi(id, "New chat", System.currentTimeMillis())) + it }
+        activeChatId.value = id
+        localState.update { it.copy(input = "", attachments = emptyList(), selectedHistoryId = id, sidebarCollapsed = true) }
     }
 
     fun selectHistory(id: String) {
-        localState.update { it.copy(selectedHistoryId = id) }
+        activeChatId.value = id
+        localState.update { it.copy(selectedHistoryId = id, sidebarCollapsed = true) }
     }
 
     fun useQuickPrompt(prompt: String) {
@@ -208,6 +231,19 @@ class ChatViewModel @Inject constructor(
         apiKeyStore.select(id)
     }
 
+    fun renameApi(id: String, label: String) {
+        apiKeyStore.rename(id, label)
+    }
+
+    fun toggleApiEnabled(id: String) {
+        val api = localState.value.savedApis.firstOrNull { it.id == id } ?: return
+        apiKeyStore.setEnabled(id, !api.enabled)
+    }
+
+    fun deleteApi(id: String) {
+        apiKeyStore.remove(id)
+    }
+
     fun toggleSidebar() {
         localState.update { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
     }
@@ -219,6 +255,26 @@ class ChatViewModel @Inject constructor(
     fun toggleTheme() {
         localState.update { it.copy(darkTheme = !it.darkTheme) }
     }
+
+    private fun appendToActiveChat(message: ChatMessage) {
+        sessions.update { current ->
+            current.map { session ->
+                if (session.id == activeChatId.value) {
+                    val title = if (session.messages.isEmpty() && message.role == MessageRole.User) {
+                        message.content.lineSequence().firstOrNull().orEmpty().take(38).ifBlank { "New chat" }
+                    } else {
+                        session.title
+                    }
+                    session.copy(title = title, messages = session.messages + message)
+                } else {
+                    session
+                }
+            }
+        }
+    }
+
+    private fun currentMessages(): List<ChatMessage> =
+        sessions.value.firstOrNull { it.id == activeChatId.value }?.messages.orEmpty()
 
     private fun detectProvider(key: String): ProviderUi? {
         if (key.length < 8 || key.contains(" ")) return null
@@ -260,6 +316,6 @@ class ChatViewModel @Inject constructor(
     }
 }
 
-private fun SavedApiKey.toUi() = SavedApiUi(id, providerName, model, maskedKey)
+private fun SavedApiKey.toUi() = SavedApiUi(id, label, providerName, model, maskedKey, enabled)
 
 private fun SavedApiKey.toProviderUi() = ProviderUi(providerId, providerName, model, providerName.uppercase().take(8))

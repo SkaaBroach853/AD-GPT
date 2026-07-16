@@ -43,6 +43,9 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -67,6 +70,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,6 +95,9 @@ fun ChatScreen(
     onAddAttachment: (String, String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onSelectApi: (String) -> Unit,
+    onRenameApi: (String, String) -> Unit,
+    onToggleApiEnabled: (String) -> Unit,
+    onDeleteApi: (String) -> Unit,
     onToggleSidebar: () -> Unit,
     onToggleChatMinimized: () -> Unit,
     onToggleTheme: () -> Unit,
@@ -184,7 +192,11 @@ fun ChatScreen(
             onClearApi = onClearApi,
             onNewChat = onNewChat,
             onHistoryClick = onHistoryClick,
+            onSelectApi = onSelectApi,
             onToggleTheme = onToggleTheme,
+            onRenameApi = onRenameApi,
+            onToggleApiEnabled = onToggleApiEnabled,
+            onDeleteApi = onDeleteApi,
             onSettingsClick = onSettingsClick
         )
     }
@@ -249,6 +261,7 @@ private fun MessageList(
 @Composable
 private fun MessageBubble(message: ChatMessage, colors: ChatColors) {
     val isUser = message.role == MessageRole.User
+    val clipboard = LocalClipboardManager.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
@@ -261,11 +274,59 @@ private fun MessageBubble(message: ChatMessage, colors: ChatColors) {
             ),
             shape = RoundedCornerShape(22.dp)
         ) {
-            Text(
-                text = message.content,
-                modifier = Modifier.padding(14.dp),
-                color = if (isUser) colors.userText else colors.text
-            )
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (isUser) {
+                    Text(text = message.content, color = colors.userText)
+                } else {
+                    StructuredAssistantContent(message.content, colors)
+                }
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    IconButton(onClick = { clipboard.setText(AnnotatedString(message.content)) }) {
+                        Icon(
+                            Icons.Rounded.ContentCopy,
+                            contentDescription = "Copy message",
+                            tint = if (isUser) colors.userText else colors.text,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StructuredAssistantContent(content: String, colors: ChatColors) {
+    val clipboard = LocalClipboardManager.current
+    val parts = content.split("```")
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        parts.forEachIndexed { index, part ->
+            if (index % 2 == 1) {
+                val code = part.lines().dropWhile { it.isBlank() }.let { lines ->
+                    if ((lines.firstOrNull()?.length ?: 0) < 24 && lines.firstOrNull()?.contains(" ") == false) {
+                        lines.drop(1)
+                    } else {
+                        lines
+                    }
+                }.joinToString("\n").trim()
+                Surface(
+                    color = Color.Black.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, colors.border)
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Code", color = colors.muted, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { clipboard.setText(AnnotatedString(code)) }) {
+                                Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy code", tint = colors.text)
+                            }
+                        }
+                        Text(code, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            } else if (part.isNotBlank()) {
+                Text(part.trim(), color = colors.text)
+            }
         }
     }
 }
@@ -418,7 +479,11 @@ private fun SidebarDrawer(
     onClearApi: () -> Unit,
     onNewChat: () -> Unit,
     onHistoryClick: (String) -> Unit,
+    onSelectApi: (String) -> Unit,
     onToggleTheme: () -> Unit,
+    onRenameApi: (String, String) -> Unit,
+    onToggleApiEnabled: (String) -> Unit,
+    onDeleteApi: (String) -> Unit,
     onSettingsClick: () -> Unit
 ) {
     AnimatedVisibility(
@@ -446,6 +511,15 @@ private fun SidebarDrawer(
                 }
 
                 AddApiCard(state, colors, onApiKeyChange, onActivateApi, onClearApi)
+                ApiManager(
+                    apis = state.savedApis,
+                    activeApiId = state.activeApiId,
+                    colors = colors,
+                    onSelectApi = onSelectApi,
+                    onRenameApi = onRenameApi,
+                    onToggleApiEnabled = onToggleApiEnabled,
+                    onDeleteApi = onDeleteApi
+                )
 
                 Button(
                     onClick = onNewChat,
@@ -525,6 +599,69 @@ private fun AddApiCard(
                 ) { Text("Activate") }
                 OutlinedButton(onClick = onClearApi, shape = RoundedCornerShape(14.dp)) {
                     Text("Clear", color = colors.text)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApiManager(
+    apis: List<SavedApiUi>,
+    activeApiId: String?,
+    colors: ChatColors,
+    onSelectApi: (String) -> Unit,
+    onRenameApi: (String, String) -> Unit,
+    onToggleApiEnabled: (String) -> Unit,
+    onDeleteApi: (String) -> Unit
+) {
+    if (apis.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Manage APIs", color = colors.muted, style = MaterialTheme.typography.labelLarge)
+        apis.forEach { api ->
+            var editing by remember(api.id) { androidx.compose.runtime.mutableStateOf(false) }
+            var label by remember(api.id, api.label) { androidx.compose.runtime.mutableStateOf(api.label) }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = colors.card,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, colors.border)
+            ) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (editing) {
+                        OutlinedTextField(
+                            value = label,
+                            onValueChange = { label = it },
+                            singleLine = true,
+                            textStyle = TextStyle(color = colors.text),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(
+                            "${if (api.id == activeApiId) "✓ " else ""}${api.label}",
+                            color = colors.text,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Text("${api.providerName} • ${api.model}", color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    Text("Key hidden • ${if (api.enabled) "Enabled" else "Stopped"}", color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    Row {
+                        IconButton(onClick = { onSelectApi(api.id) }) {
+                            Icon(Icons.Rounded.SmartToy, contentDescription = "Use API", tint = colors.text)
+                        }
+                        IconButton(onClick = {
+                            if (editing) onRenameApi(api.id, label)
+                            editing = !editing
+                        }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Rename API", tint = colors.text)
+                        }
+                        Button(onClick = { onToggleApiEnabled(api.id) }, shape = RoundedCornerShape(12.dp)) {
+                            Text(if (api.enabled) "Stop" else "Enable")
+                        }
+                        IconButton(onClick = { onDeleteApi(api.id) }) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete API", tint = Color(0xFFFF8A8A))
+                        }
+                    }
                 }
             }
         }
