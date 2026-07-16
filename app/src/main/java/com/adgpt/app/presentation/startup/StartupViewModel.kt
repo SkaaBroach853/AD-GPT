@@ -23,19 +23,22 @@ class StartupViewModel @Inject constructor(
     private val _state = MutableStateFlow(StartupState())
     val state = _state.asStateFlow()
     private var transitionJob: Job? = null
+    private var startupStarted = false
 
     fun beginStartup() {
-        if (_state.value.videoAssetPath != null || _state.value.appPreloaded) return
-        val video = startupVideoResolver.findStartupVideo()
-        _state.update {
-            it.copy(
-                videoAssetPath = video,
-                showIntro = video != null,
-                mainVisible = video == null,
-                mainEntranceReady = video == null
-            )
-        }
+        if (startupStarted) return
+        startupStarted = true
         viewModelScope.launch {
+            val shouldPlayIntro = settingsRepository.playIntroOnStart.first()
+            val video = if (shouldPlayIntro) startupVideoResolver.findStartupVideo() else null
+            _state.update {
+                it.copy(
+                    videoAssetPath = video,
+                    showIntro = video != null,
+                    mainVisible = video == null,
+                    mainEntranceReady = video == null
+                )
+            }
             preloadApplication()
             _state.update { it.copy(appPreloaded = true) }
             if (video == null) revealMainImmediately()
@@ -55,6 +58,7 @@ class StartupViewModel @Inject constructor(
 
     private suspend fun preloadApplication() {
         settingsRepository.reduceMotion.first()
+        settingsRepository.playIntroOnStart.first()
         chatRepository.observeMessages().first()
     }
 

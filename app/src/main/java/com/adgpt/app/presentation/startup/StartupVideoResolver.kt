@@ -21,7 +21,8 @@ class StartupVideoResolver @Inject constructor(
                 name.endsWith(".mkv", ignoreCase = true)
             }
             .sortedWith(
-                compareByDescending<String> { it.equals("Same_but_in_vertical_not_horiz.mp4", ignoreCase = true) }
+                compareByDescending<String> { it.equals("want_AD_GPT_in_center_withing.mp4", ignoreCase = true) }
+                    .thenByDescending { it.contains("center", ignoreCase = true) }
                     .thenByDescending { it.contains("vertical", ignoreCase = true) }
                     .thenBy { it }
             )

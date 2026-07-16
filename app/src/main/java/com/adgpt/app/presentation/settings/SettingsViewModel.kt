@@ -16,7 +16,14 @@ class SettingsViewModel @Inject constructor(
     val reduceMotion = settingsRepository.reduceMotion
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val playIntroOnStart = settingsRepository.playIntroOnStart
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     fun setReduceMotion(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setReduceMotion(enabled) }
+    }
+
+    fun setPlayIntroOnStart(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setPlayIntroOnStart(enabled) }
     }
 }

@@ -18,11 +18,19 @@ class SettingsRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : SettingsRepository {
     private val reduceMotionKey = booleanPreferencesKey("reduce_motion")
+    private val playIntroOnStartKey = booleanPreferencesKey("play_intro_on_start")
 
     override val reduceMotion: Flow<Boolean> =
         context.settingsDataStore.data.map { preferences -> preferences[reduceMotionKey] ?: false }
 
+    override val playIntroOnStart: Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences -> preferences[playIntroOnStartKey] ?: true }
+
     override suspend fun setReduceMotion(enabled: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[reduceMotionKey] = enabled }
+    }
+
+    override suspend fun setPlayIntroOnStart(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[playIntroOnStartKey] = enabled }
     }
 }

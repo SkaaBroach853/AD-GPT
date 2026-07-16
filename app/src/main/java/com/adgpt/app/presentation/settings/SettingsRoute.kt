@@ -37,6 +37,7 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val reduceMotion by viewModel.reduceMotion.collectAsState()
+    val playIntroOnStart by viewModel.playIntroOnStart.collectAsState()
 
     Column(
         modifier = Modifier
@@ -51,22 +52,44 @@ fun SettingsRoute(
             Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(24.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = PanelBlack),
-            shape = RoundedCornerShape(28.dp),
-            modifier = Modifier.fillMaxWidth()
+        SettingsSwitchCard(
+            title = "Play intro on start",
+            subtitle = "Shows the startup video before AD-GPT opens.",
+            checked = playIntroOnStart,
+            onCheckedChange = viewModel::setPlayIntroOnStart
+        )
+        Spacer(Modifier.height(12.dp))
+        SettingsSwitchCard(
+            title = "Reduce motion",
+            subtitle = "Softens interface animations for accessibility.",
+            checked = reduceMotion,
+            onCheckedChange = viewModel::setReduceMotion
+        )
+    }
+}
+
+@Composable
+private fun SettingsSwitchCard(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = PanelBlack),
+        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(22.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(22.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Reduce motion", fontWeight = FontWeight.Medium)
-                    Text("Softens interface animations for accessibility.", color = TextSecondary)
-                }
-                Switch(checked = reduceMotion, onCheckedChange = viewModel::setReduceMotion)
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Medium)
+                Text(subtitle, color = TextSecondary)
             }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }

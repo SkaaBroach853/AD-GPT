@@ -236,7 +236,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun toggleApiEnabled(id: String) {
-        val api = localState.value.savedApis.firstOrNull { it.id == id } ?: return
+        val api = apiKeyStore.keys.value.firstOrNull { it.id == id } ?: return
         apiKeyStore.setEnabled(id, !api.enabled)
     }
 
