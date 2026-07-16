@@ -40,6 +40,9 @@ fun ChatRoute(
             readyForEntrance = readyForEntrance,
             onInputChange = viewModel::updateInput,
             onSend = viewModel::send,
+            onNewChat = viewModel::startNewChat,
+            onHistoryClick = viewModel::selectHistory,
+            onQuickPrompt = viewModel::useQuickPrompt,
             onSettingsClick = onSettingsClick
         )
     }

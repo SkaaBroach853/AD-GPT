@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.adgpt.app.presentation.chat
 
 import androidx.compose.animation.AnimatedVisibility
@@ -6,10 +8,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -24,17 +30,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,9 +62,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.adgpt.app.domain.model.ChatMessage
 import com.adgpt.app.domain.model.MessageRole
+import com.adgpt.app.presentation.theme.ElectricBlue
 import com.adgpt.app.presentation.theme.PanelBlack
 import com.adgpt.app.presentation.theme.SoftBlue
 import com.adgpt.app.presentation.theme.TextSecondary
@@ -61,6 +77,9 @@ fun ChatScreen(
     readyForEntrance: Boolean,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onNewChat: () -> Unit,
+    onHistoryClick: (String) -> Unit,
+    onQuickPrompt: (String) -> Unit,
     onSettingsClick: () -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -80,7 +99,13 @@ fun ChatScreen(
             enter = fadeIn(entranceTween(duration = 520)) +
                 slideInHorizontally(animationSpec = tween(580, easing = EntranceEase)) { -it / 2 }
         ) {
-            Sidebar(onSettingsClick = onSettingsClick)
+            WorkspaceSidebar(
+                history = state.history,
+                selectedHistoryId = state.selectedHistoryId,
+                onNewChat = onNewChat,
+                onHistoryClick = onHistoryClick,
+                onSettingsClick = onSettingsClick
+            )
         }
 
         Column(
@@ -109,6 +134,7 @@ fun ChatScreen(
             ) {
                 MessageList(
                     messages = state.messages,
+                    onQuickPrompt = onQuickPrompt,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -148,30 +174,178 @@ fun ChatScreen(
 }
 
 @Composable
-private fun Sidebar(onSettingsClick: () -> Unit) {
+private fun WorkspaceSidebar(
+    history: List<ChatHistoryItem>,
+    selectedHistoryId: String?,
+    onNewChat: () -> Unit,
+    onHistoryClick: (String) -> Unit,
+    onSettingsClick: () -> Unit
+) {
     Column(
         modifier = Modifier
-            .width(92.dp)
+            .width(304.dp)
             .fillMaxHeight()
-            .background(Color.Black.copy(alpha = 0.34f))
-            .padding(vertical = 28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+            .background(Color.Black.copy(alpha = 0.52f))
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .background(SoftBlue, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color.Black)
+                Text("AD", color = Color.Black, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(28.dp))
-            Icon(Icons.Rounded.History, contentDescription = "History", tint = TextSecondary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("AD-GPT", fontWeight = FontWeight.SemiBold)
+                Text("AI workspace", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = onSettingsClick) {
+                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = TextSecondary)
+            }
         }
-        IconButton(onClick = onSettingsClick) {
-            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = TextSecondary)
+
+        Button(
+            onClick = onNewChat,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = SoftBlue, contentColor = Color.Black)
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("New Chat")
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White.copy(alpha = 0.07f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Search chats", color = TextSecondary)
+            }
+        }
+
+        SidebarSectionTitle(icon = Icons.Rounded.History, title = "Chat History")
+
+        if (history.isEmpty()) {
+            EmptyHistoryCard()
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(history, key = { it.id }) { item ->
+                    HistoryRow(
+                        item = item,
+                        selected = item.id == selectedHistoryId,
+                        onClick = { onHistoryClick(item.id) }
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+        SidebarOption(Icons.Rounded.AutoAwesome, "Model", "AD-GPT local demo")
+        SidebarOption(Icons.Rounded.Folder, "Knowledge", "Files and context")
+        SidebarOption(Icons.Rounded.Tune, "Tools", "Provider, API, cache")
+
+        OutlinedButton(
+            onClick = onSettingsClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Open Settings")
+        }
+    }
+}
+
+@Composable
+private fun EmptyHistoryCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("No chats yet", fontWeight = FontWeight.Medium)
+            Text(
+                "Start a conversation and your recent prompts will appear here.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun HistoryRow(
+    item: ChatHistoryItem,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) SoftBlue.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.055f),
+        border = BorderStroke(1.dp, if (selected) SoftBlue.copy(alpha = 0.42f) else Color.White.copy(alpha = 0.06f))
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+            Text(item.subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun SidebarSectionTitle(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = ElectricBlue, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(title, color = TextSecondary, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+private fun SidebarOption(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color.White.copy(alpha = 0.07f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -185,7 +359,7 @@ private fun TopBar(onSettingsClick: () -> Unit) {
     ) {
         Column {
             Text("AD-GPT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-            Text("Premium AI workspace", color = TextSecondary)
+            Text("Premium AI workspace • intro video enabled", color = TextSecondary)
         }
         IconButton(onClick = onSettingsClick) {
             Icon(Icons.Rounded.Settings, contentDescription = "Settings")
@@ -194,19 +368,23 @@ private fun TopBar(onSettingsClick: () -> Unit) {
 }
 
 @Composable
-private fun MessageList(messages: List<ChatMessage>, modifier: Modifier = Modifier) {
+private fun MessageList(
+    messages: List<ChatMessage>,
+    onQuickPrompt: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = PanelBlack.copy(alpha = 0.76f)),
         shape = RoundedCornerShape(32.dp)
     ) {
         if (messages.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
-                Text("Your AD-GPT session is warmed up and ready.", color = TextSecondary)
-            }
+            EmptyConversation(onQuickPrompt = onQuickPrompt)
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(20.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(messages, key = { it.id }) { message ->
@@ -214,6 +392,52 @@ private fun MessageList(messages: List<ChatMessage>, modifier: Modifier = Modifi
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyConversation(onQuickPrompt: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(68.dp)
+                .background(SoftBlue.copy(alpha = 0.16f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = SoftBlue, modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("What should AD-GPT help with today?", style = MaterialTheme.typography.headlineSmall)
+        Text("Choose a starter or type below.", color = TextSecondary)
+        Spacer(Modifier.height(22.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            QuickPrompt("Draft a launch plan", onQuickPrompt)
+            QuickPrompt("Summarize an idea", onQuickPrompt)
+            QuickPrompt("Create app settings", onQuickPrompt)
+            QuickPrompt("Design a provider layer", onQuickPrompt)
+        }
+    }
+}
+
+@Composable
+private fun QuickPrompt(
+    text: String,
+    onQuickPrompt: (String) -> Unit
+) {
+    OutlinedButton(
+        onClick = { onQuickPrompt(text) },
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Text(text)
     }
 }
 
