@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.adgpt.app.domain.model.ChatMessage
 import com.adgpt.app.domain.model.MessageRole
+import com.adgpt.app.data.provider.ApiKeyStore
+import com.adgpt.app.data.provider.SavedApiKey
 import com.adgpt.app.domain.usecase.ClearChatUseCase
 import com.adgpt.app.domain.usecase.ObserveMessagesUseCase
 import com.adgpt.app.domain.usecase.SendMessageUseCase
@@ -25,6 +27,8 @@ data class ChatUiState(
     val detectedProvider: ProviderUi? = null,
     val activeProvider: ProviderUi? = null,
     val activeModel: String = "AD-GPT",
+    val savedApis: List<SavedApiUi> = emptyList(),
+    val activeApiId: String? = null,
     val attachments: List<AttachmentUi> = emptyList(),
     val apiStatus: ApiStatus = ApiStatus.Idle,
     val sending: Boolean = false,
@@ -53,6 +57,13 @@ data class AttachmentUi(
     val type: String
 )
 
+data class SavedApiUi(
+    val id: String,
+    val providerName: String,
+    val model: String,
+    val maskedKey: String
+)
+
 enum class ApiStatus {
     Idle,
     Detected,
@@ -64,12 +75,13 @@ enum class ApiStatus {
 class ChatViewModel @Inject constructor(
     observeMessages: ObserveMessagesUseCase,
     private val sendMessage: SendMessageUseCase,
-    private val clearChat: ClearChatUseCase
+    private val clearChat: ClearChatUseCase,
+    private val apiKeyStore: ApiKeyStore
 ) : ViewModel() {
     private val localState = MutableStateFlow(ChatUiState())
 
     val state: StateFlow<ChatUiState> =
-        combine(observeMessages(), localState) { messages, state ->
+        combine(observeMessages(), localState, apiKeyStore.keys, apiKeyStore.activeKeyId) { messages, state, keys, activeKeyId ->
             val history = messages
                 .filter { it.role == MessageRole.User }
                 .takeLast(12)
@@ -84,7 +96,11 @@ class ChatViewModel @Inject constructor(
             state.copy(
                 messages = messages,
                 history = history,
-                selectedHistoryId = state.selectedHistoryId ?: history.firstOrNull()?.id
+                selectedHistoryId = state.selectedHistoryId ?: history.firstOrNull()?.id,
+                savedApis = keys.map { it.toUi() },
+                activeApiId = activeKeyId,
+                activeProvider = keys.firstOrNull { it.id == activeKeyId }?.toProviderUi() ?: state.activeProvider,
+                activeModel = keys.firstOrNull { it.id == activeKeyId }?.model ?: state.activeModel
             )
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState())
@@ -110,6 +126,18 @@ class ChatViewModel @Inject constructor(
 
     fun activateDetectedProvider() {
         val provider = localState.value.detectedProvider ?: return
+        val rawKey = localState.value.apiKeyInput.trim()
+        if (rawKey.isBlank() || rawKey.contains("•")) return
+        apiKeyStore.addOrUpdate(
+            SavedApiKey(
+                id = provider.id + "-" + rawKey.takeLast(6),
+                providerId = provider.id,
+                providerName = provider.name,
+                model = provider.model,
+                key = rawKey,
+                maskedKey = maskKey(rawKey)
+            )
+        )
         localState.update {
             it.copy(
                 activeProvider = provider,
@@ -121,6 +149,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun clearApiKey() {
+        localState.value.activeApiId?.let(apiKeyStore::remove)
         localState.update {
             it.copy(
                 apiKeyInput = "",
@@ -175,6 +204,10 @@ class ChatViewModel @Inject constructor(
         localState.update { state -> state.copy(attachments = state.attachments.filterNot { it.id == id }) }
     }
 
+    fun selectApi(id: String) {
+        apiKeyStore.select(id)
+    }
+
     fun toggleSidebar() {
         localState.update { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
     }
@@ -191,7 +224,9 @@ class ChatViewModel @Inject constructor(
         if (key.length < 8 || key.contains(" ")) return null
         return when {
             key.startsWith("nvapi-", ignoreCase = true) ->
-                ProviderUi("nvidia", "NVIDIA", "NVIDIA NIM", "NVIDIA")
+                ProviderUi("nvidia", "NVIDIA", "meta/llama-3.1-8b-instruct", "NVIDIA")
+            key.startsWith("glm-", ignoreCase = true) || key.count { it == '.' } == 1 ->
+                ProviderUi("glm", "GLM / Zhipu", "glm-4-flash", "GLM")
             key.startsWith("sk-ant-", ignoreCase = true) ->
                 ProviderUi("anthropic", "Anthropic", "Claude", "CLAUDE")
             key.startsWith("AIza", ignoreCase = false) ->
@@ -224,3 +259,7 @@ class ChatViewModel @Inject constructor(
         return normalized.take(6) + "••••••" + normalized.takeLast(4)
     }
 }
+
+private fun SavedApiKey.toUi() = SavedApiUi(id, providerName, model, maskedKey)
+
+private fun SavedApiKey.toProviderUi() = ProviderUi(providerId, providerName, model, providerName.uppercase().take(8))

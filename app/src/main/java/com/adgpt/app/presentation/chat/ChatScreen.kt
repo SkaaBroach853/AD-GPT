@@ -42,10 +42,13 @@ import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,6 +89,7 @@ fun ChatScreen(
     onQuickPrompt: (String) -> Unit,
     onAddAttachment: (String, String) -> Unit,
     onRemoveAttachment: (String) -> Unit,
+    onSelectApi: (String) -> Unit,
     onToggleSidebar: () -> Unit,
     onToggleChatMinimized: () -> Unit,
     onToggleTheme: () -> Unit,
@@ -157,13 +161,16 @@ fun ChatScreen(
             ComposerBar(
                 input = state.input,
                 attachments = state.attachments,
+                savedApis = state.savedApis,
+                activeApiId = state.activeApiId,
                 sending = state.sending,
                 colors = colors,
                 onInputChange = onInputChange,
                 onSend = onSend,
                 onAttachFile = { fileLauncher.launch(arrayOf("*/*")) },
                 onCamera = { cameraLauncher.launch(null) },
-                onRemoveAttachment = onRemoveAttachment
+                onRemoveAttachment = onRemoveAttachment,
+                onSelectApi = onSelectApi
             )
         }
 
@@ -267,14 +274,18 @@ private fun MessageBubble(message: ChatMessage, colors: ChatColors) {
 private fun ComposerBar(
     input: String,
     attachments: List<AttachmentUi>,
+    savedApis: List<SavedApiUi>,
+    activeApiId: String?,
     sending: Boolean,
     colors: ChatColors,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onAttachFile: () -> Unit,
     onCamera: () -> Unit,
-    onRemoveAttachment: (String) -> Unit
+    onRemoveAttachment: (String) -> Unit,
+    onSelectApi: (String) -> Unit
 ) {
+    var apiMenuOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (attachments.isNotEmpty()) {
             AttachmentStrip(attachments = attachments, colors = colors, onRemoveAttachment = onRemoveAttachment)
@@ -312,6 +323,38 @@ private fun ComposerBar(
                         cursorColor = SoftBlue
                     )
                 )
+                Box {
+                    IconButton(onClick = { apiMenuOpen = true }) {
+                        Icon(Icons.Rounded.SmartToy, contentDescription = "Choose API or model", tint = colors.text)
+                    }
+                    DropdownMenu(expanded = apiMenuOpen, onDismissRequest = { apiMenuOpen = false }) {
+                        if (savedApis.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("Add API in sidebar first") },
+                                onClick = { apiMenuOpen = false }
+                            )
+                        } else {
+                            savedApis.forEach { api ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(api.providerName)
+                                            Text(api.model, style = MaterialTheme.typography.bodySmall)
+                                            Text(api.maskedKey, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        if (api.id == activeApiId) Text("✓") else Icon(Icons.Rounded.SmartToy, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        apiMenuOpen = false
+                                        onSelectApi(api.id)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
                 IconButton(
                     onClick = onSend,
                     enabled = (input.isNotBlank() || attachments.isNotEmpty()) && !sending

@@ -48,6 +48,7 @@ fun ChatRoute(
             onQuickPrompt = viewModel::useQuickPrompt,
             onAddAttachment = viewModel::addAttachment,
             onRemoveAttachment = viewModel::removeAttachment,
+            onSelectApi = viewModel::selectApi,
             onToggleSidebar = viewModel::toggleSidebar,
             onToggleChatMinimized = viewModel::toggleChatMinimized,
             onToggleTheme = viewModel::toggleTheme,
