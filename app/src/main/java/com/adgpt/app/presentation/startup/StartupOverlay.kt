@@ -35,6 +35,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val PremiumEase = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
@@ -54,7 +55,8 @@ fun StartupOverlay(
     val focusRequester = remember { FocusRequester() }
     val interactionSource = remember { MutableInteractionSource() }
     val player = remember(videoAssetPath) {
-        videoAssetPath?.let {
+        runCatching {
+            videoAssetPath?.let {
             ExoPlayer.Builder(context)
                 .setHandleAudioBecomingNoisy(true)
                 .build()
@@ -64,6 +66,13 @@ fun StartupOverlay(
                     repeatMode = Player.REPEAT_MODE_OFF
                     prepare()
                 }
+            }
+        }.getOrNull()
+    }
+
+    LaunchedEffect(player, videoAssetPath) {
+        if (videoAssetPath != null && player == null) {
+            onVideoFinished()
         }
     }
 
@@ -99,7 +108,8 @@ fun StartupOverlay(
     }
 
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        delay(120)
+        runCatching { focusRequester.requestFocus() }
     }
 
     Box(

@@ -80,6 +80,7 @@ import com.adgpt.app.presentation.theme.ElectricBlue
 import com.adgpt.app.presentation.theme.PanelBlack
 import com.adgpt.app.presentation.theme.SoftBlue
 import com.adgpt.app.presentation.theme.TextSecondary
+import kotlinx.coroutines.delay
 
 @Composable
 fun ChatScreen(
@@ -106,7 +107,10 @@ fun ChatScreen(
     )
 
     LaunchedEffect(readyForEntrance) {
-        if (readyForEntrance) focusRequester.requestFocus()
+        if (readyForEntrance) {
+            delay(250)
+            runCatching { focusRequester.requestFocus() }
+        }
     }
 
     Row(Modifier.fillMaxSize()) {
