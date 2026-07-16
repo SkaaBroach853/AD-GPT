@@ -24,12 +24,13 @@ data class ChatUiState(
     val apiKeyInput: String = "",
     val detectedProvider: ProviderUi? = null,
     val activeProvider: ProviderUi? = null,
-    val activeModel: String = "Local demo",
+    val activeModel: String = "AD-GPT",
     val apiStatus: ApiStatus = ApiStatus.Idle,
     val sending: Boolean = false,
     val selectedHistoryId: String? = null,
-    val sidebarCollapsed: Boolean = false,
-    val chatMinimized: Boolean = false
+    val sidebarCollapsed: Boolean = true,
+    val chatMinimized: Boolean = false,
+    val darkTheme: Boolean = true
 )
 
 data class ChatHistoryItem(
@@ -119,7 +120,7 @@ class ChatViewModel @Inject constructor(
                 apiKeyInput = "",
                 detectedProvider = null,
                 activeProvider = null,
-                activeModel = "Local demo",
+                activeModel = "AD-GPT",
                 apiStatus = ApiStatus.Idle
             )
         }
@@ -156,6 +157,10 @@ class ChatViewModel @Inject constructor(
 
     fun toggleChatMinimized() {
         localState.update { it.copy(chatMinimized = !it.chatMinimized) }
+    }
+
+    fun toggleTheme() {
+        localState.update { it.copy(darkTheme = !it.darkTheme) }
     }
 
     private fun detectProvider(key: String): ProviderUi? {

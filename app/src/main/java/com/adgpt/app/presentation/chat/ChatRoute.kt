@@ -48,6 +48,7 @@ fun ChatRoute(
             onQuickPrompt = viewModel::useQuickPrompt,
             onToggleSidebar = viewModel::toggleSidebar,
             onToggleChatMinimized = viewModel::toggleChatMinimized,
+            onToggleTheme = viewModel::toggleTheme,
             onSettingsClick = onSettingsClick
         )
     }
