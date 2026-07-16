@@ -68,8 +68,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,7 +78,6 @@ import com.adgpt.app.presentation.theme.ElectricBlue
 import com.adgpt.app.presentation.theme.PanelBlack
 import com.adgpt.app.presentation.theme.SoftBlue
 import com.adgpt.app.presentation.theme.TextSecondary
-import kotlinx.coroutines.delay
 
 @Composable
 fun ChatScreen(
@@ -98,20 +95,12 @@ fun ChatScreen(
     onToggleChatMinimized: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    val focusRequester = remember { FocusRequester() }
     var composerMenuOpen by remember { mutableStateOf(false) }
     val inputScale by animateFloatAsState(
         targetValue = if (readyForEntrance) 1f else 0.98f,
         animationSpec = entranceTween(delay = 240, duration = 520),
         label = "inputScale"
     )
-
-    LaunchedEffect(readyForEntrance) {
-        if (readyForEntrance) {
-            delay(250)
-            runCatching { focusRequester.requestFocus() }
-        }
-    }
 
     Row(Modifier.fillMaxSize()) {
         AnimatedVisibility(
@@ -215,9 +204,7 @@ fun ChatScreen(
                     onValueChange = onInputChange,
                     placeholder = { Text("Ask AD-GPT…") },
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focusRequester),
+                    modifier = Modifier.weight(1f),
                     singleLine = false,
                     minLines = 1,
                     maxLines = 5

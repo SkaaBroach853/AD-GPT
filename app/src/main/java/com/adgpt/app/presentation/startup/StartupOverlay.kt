@@ -18,8 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -52,7 +50,6 @@ fun StartupOverlay(
     val overlayAlpha = remember { Animatable(1f) }
     val brightnessAlpha = remember { Animatable(0f) }
     val blur = remember { Animatable(0f) }
-    val focusRequester = remember { FocusRequester() }
     val interactionSource = remember { MutableInteractionSource() }
     val player = remember(videoAssetPath) {
         runCatching {
@@ -114,16 +111,10 @@ fun StartupOverlay(
         }
     }
 
-    LaunchedEffect(Unit) {
-        delay(120)
-        runCatching { focusRequester.requestFocus() }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
