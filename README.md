@@ -23,7 +23,7 @@ The project targets API 35 and uses Android Gradle Plugin `8.7.3` for broad comp
 ```text
 app/src/main/java/com/adgpt/app
 ├── data
-│   ├── local          Room database and DAO
+│   ├── local          Room-shaped data models plus local DAO
 │   ├── network        Retrofit DTOs/API contract
 │   ├── provider       AI provider abstraction
 │   └── repository     Repository implementations
@@ -41,4 +41,5 @@ app/src/main/java/com/adgpt/app
 
 - The default AI provider is local demo mode so the app launches without external keys.
 - Add a production provider by implementing `AiProvider` and binding it in `AppModule`.
+- The local chat DAO currently uses an in-memory implementation to avoid Windows SQLite native verifier issues during KAPT builds.
 - The startup screen is intentionally pure black with only the Media3 video surface visible before reveal.

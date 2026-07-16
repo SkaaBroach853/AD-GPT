@@ -1,10 +1,9 @@
 package com.adgpt.app.di
 
 import android.content.Context
-import androidx.room.Room
 import com.adgpt.app.BuildConfig
-import com.adgpt.app.data.local.ADGPTDatabase
 import com.adgpt.app.data.local.ChatMessageDao
+import com.adgpt.app.data.local.InMemoryChatMessageDao
 import com.adgpt.app.data.network.ChatApi
 import com.adgpt.app.data.provider.AiProvider
 import com.adgpt.app.data.provider.OfflineAiProvider
@@ -32,20 +31,12 @@ abstract class AppBindings {
     @Binds abstract fun bindChatRepository(impl: ChatRepositoryImpl): ChatRepository
     @Binds abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
     @Binds abstract fun bindAiProvider(impl: OfflineAiProvider): AiProvider
+    @Binds abstract fun bindChatMessageDao(impl: InMemoryChatMessageDao): ChatMessageDao
 }
 
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    @Provides
-    @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): ADGPTDatabase =
-        Room.databaseBuilder(context, ADGPTDatabase::class.java, "adgpt.db")
-            .build()
-
-    @Provides
-    fun provideChatMessageDao(database: ADGPTDatabase): ChatMessageDao = database.chatMessageDao()
-
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient =
