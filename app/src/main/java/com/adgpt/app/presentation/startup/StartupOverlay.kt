@@ -76,6 +76,13 @@ fun StartupOverlay(
         }
     }
 
+    LaunchedEffect(videoAssetPath) {
+        if (videoAssetPath != null) {
+            delay(8_000)
+            if (!transitionActive) onVideoFinished()
+        }
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
