@@ -16,7 +16,7 @@ AD-GPT is a Kotlin Android Studio project built with Jetpack Compose, Material 3
 2. Let Gradle sync.
 3. Run the `app` configuration on an emulator or device running Android 8.0/API 26 or newer.
 
-The project targets API 37 and uses Android Gradle Plugin `9.2.0`, matching the current AGP release notes that list API 37 support and Gradle `9.4.1`.
+The project targets API 35 and uses Android Gradle Plugin `8.7.3` for broad compatibility with current Android Studio installs.
 
 ## Structure
 
